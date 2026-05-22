@@ -34,7 +34,7 @@ const neuralInputKeys: NeuralInputKey[] = ['t', 'x', 'v'];
 const activationOptions: ActivationName[] = ['ReLU', 'tanh', 'sigmoid'];
 const validationModes: LassoValidationMode[] = ['전체 데이터 사용', '5-fold 교차검증'];
 const earlyStoppingCriteria: EarlyStoppingCriterion[] = ['검증 손실', '학습 손실'];
-const defaultTerms = ['1', 'x', 'v', 'v^2', 'x*v'];
+const defaultTerms: string[] = [];
 
 function formatMetric(value: number) {
   if (!Number.isFinite(value)) {

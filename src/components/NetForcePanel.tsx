@@ -9,7 +9,7 @@ import {
   type OlsFitResult,
 } from '../utils/ols';
 
-const defaultTerms = ['1', 'x', 'v', 'x^2', 'v^2', 'x*v'];
+const defaultTerms: string[] = [];
 
 function buildModelPreview(terms: string[]) {
   const visibleTerms = terms.map((term) => term.trim() || '(빈 항)');

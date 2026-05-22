@@ -19,7 +19,7 @@ type LassoPageProps = {
   onBackToData: () => void;
 };
 
-const defaultCandidateTerms = ['1', 'x', 'v', 'x^2', 'v^2', 'x*v'];
+const defaultCandidateTerms: string[] = [];
 const validationModes: LassoValidationMode[] = ['전체 데이터 사용', '5-fold 교차검증'];
 
 function getTermErrors(terms: string[], dataset: MotionDataset) {
