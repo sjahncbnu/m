@@ -5,7 +5,6 @@ export type LassoWorkerRequest = {
   id: string;
   terms: string[];
   dataset: MotionDataset;
-  mass: number;
   lambda: number;
   standardize: boolean;
   autoSearch: boolean;

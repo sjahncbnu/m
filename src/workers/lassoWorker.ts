@@ -5,7 +5,7 @@ self.onmessage = (event: MessageEvent<LassoWorkerRequest>) => {
   const request = event.data;
 
   try {
-    const result = fitLassoAnalysis(request.terms, request.dataset, request.mass, {
+    const result = fitLassoAnalysis(request.terms, request.dataset, {
       lambda: request.lambda,
       standardize: request.standardize,
       autoSearch: request.autoSearch,

@@ -6,8 +6,10 @@ type ViewTabsProps = {
 };
 
 const tabs: Array<{ id: AppView; label: string }> = [
-  { id: 'basic', label: '기본 분석' },
-  { id: 'lasso', label: 'Lasso 회귀' },
+  { id: 'data', label: '데이터 분석' },
+  { id: 'basicFit', label: '기본 피팅' },
+  { id: 'lasso', label: 'Lasso 피팅' },
+  { id: 'neural', label: '신경망 학습' },
 ];
 
 export function ViewTabs({ currentView, onChange }: ViewTabsProps) {

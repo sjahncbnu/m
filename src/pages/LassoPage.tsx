@@ -1,5 +1,6 @@
 import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { FitComparisonChart } from '../components/charts/FitComparisonChart';
 import { PlaceholderCard } from '../components/PlaceholderCard';
 import type { MotionDataset } from '../types/dataset';
 import type { LassoWorkerRequest, LassoWorkerResponse } from '../types/lassoWorker';
@@ -15,7 +16,7 @@ import { hasAccelerationValues } from '../utils/ols';
 
 type LassoPageProps = {
   selectedDataset: MotionDataset;
-  onBackToBasic: () => void;
+  onBackToData: () => void;
 };
 
 const defaultCandidateTerms = ['1', 'x', 'v', 'x^2', 'v^2', 'x*v'];
@@ -35,10 +36,10 @@ function getTermErrors(terms: string[], dataset: MotionDataset) {
 
 function buildCandidatePreview(terms: string[]) {
   if (terms.length === 0) {
-    return 'F_net = 항 없음';
+    return 'a ≈ 항 없음';
   }
 
-  return `F_net = ${terms
+  return `a ≈ ${terms
     .map((term, index) => `c${index}·${term.trim() || '(빈 항)'}`)
     .join(' + ')}`;
 }
@@ -55,7 +56,7 @@ function formatMetric(value: number) {
   return value.toFixed(4);
 }
 
-function buildSelectedForceLaw(result: LassoAnalysisResult) {
+function buildSelectedAccelerationModel(result: LassoAnalysisResult) {
   const selectedPieces = result.coefficients
     .filter((coefficient) => coefficient.status === '선택됨')
     .map(
@@ -67,7 +68,7 @@ function buildSelectedForceLaw(result: LassoAnalysisResult) {
     selectedPieces.unshift(`절편 ${formatLassoCoefficient(result.interceptOffset)}`);
   }
 
-  return selectedPieces.length > 0 ? `F_net = ${selectedPieces.join(' + ')}` : 'F_net = 0';
+  return selectedPieces.length > 0 ? `a ≈ ${selectedPieces.join(' + ')}` : 'a ≈ 0';
 }
 
 function getPointCoordinate(
@@ -209,8 +210,7 @@ function CoefficientMagnitudeChart({ result }: { result: LassoAnalysisResult }) 
   );
 }
 
-export function LassoPage({ selectedDataset, onBackToBasic }: LassoPageProps) {
-  const [mass, setMass] = useState('1.00');
+export function LassoPage({ selectedDataset, onBackToData }: LassoPageProps) {
   const [candidateTerms, setCandidateTerms] = useState(defaultCandidateTerms);
   const [lambda, setLambda] = useState('0.12');
   const [autoLambda, setAutoLambda] = useState(false);
@@ -224,17 +224,14 @@ export function LassoPage({ selectedDataset, onBackToBasic }: LassoPageProps) {
   const requestIdRef = useRef(0);
   const termErrors = getTermErrors(candidateTerms, selectedDataset);
   const hasInvalidTerms = termErrors.some(Boolean);
-  const parsedMass = Number(mass);
   const parsedLambda = Number(lambda);
   const hasAcceleration = hasAccelerationValues(selectedDataset);
-  const isMassValid = mass.trim() !== '' && Number.isFinite(parsedMass);
   const isLambdaValid =
     autoLambda || (lambda.trim() !== '' && Number.isFinite(parsedLambda) && parsedLambda >= 0);
   const canRunLasso =
     candidateTerms.length > 0 &&
     !hasInvalidTerms &&
     hasAcceleration &&
-    isMassValid &&
     isLambdaValid &&
     selectedDataset.rows.length > 0 &&
     !isFitting;
@@ -245,7 +242,7 @@ export function LassoPage({ selectedDataset, onBackToBasic }: LassoPageProps) {
     setFitResult(null);
     setFitError(null);
     setIsFitting(false);
-  }, [selectedDataset.id, mass, candidateTerms, lambda, autoLambda, standardizeTerms, validationMode]);
+  }, [selectedDataset.id, candidateTerms, lambda, autoLambda, standardizeTerms, validationMode]);
 
   useEffect(
     () => () => {
@@ -289,7 +286,6 @@ export function LassoPage({ selectedDataset, onBackToBasic }: LassoPageProps) {
       id: requestId,
       terms: candidateTerms,
       dataset: selectedDataset,
-      mass: parsedMass,
       lambda: autoLambda ? parsedLambda || 0.12 : parsedLambda,
       standardize: standardizeTerms,
       autoSearch: autoLambda,
@@ -333,7 +329,7 @@ export function LassoPage({ selectedDataset, onBackToBasic }: LassoPageProps) {
     } catch {
       try {
         setFitResult(
-          fitLassoAnalysis(candidateTerms, selectedDataset, parsedMass, {
+          fitLassoAnalysis(candidateTerms, selectedDataset, {
             lambda: request.lambda,
             standardize: standardizeTerms,
             autoSearch: autoLambda,
@@ -356,14 +352,14 @@ export function LassoPage({ selectedDataset, onBackToBasic }: LassoPageProps) {
   return (
     <main className="mx-auto max-w-[1800px] px-6 py-5">
       <div className="mb-5 flex items-center justify-between gap-4">
-        <h2 className="text-xl font-bold text-slate-950">Lasso 회귀</h2>
+        <h2 className="text-xl font-bold text-slate-950">Lasso 피팅</h2>
         <button
           type="button"
-          onClick={onBackToBasic}
+          onClick={onBackToData}
           className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 shadow-card transition hover:border-blue-200 hover:text-blue-700"
         >
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-          메인 분석으로 돌아가기
+          데이터 분석으로 돌아가기
         </button>
       </div>
 
@@ -379,20 +375,8 @@ export function LassoPage({ selectedDataset, onBackToBasic }: LassoPageProps) {
               </p>
             </div>
 
-            <label className="block rounded-md border border-slate-200 bg-slate-50 p-4">
-              <span className="block text-sm font-semibold text-slate-700">질량 m (kg)</span>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={mass}
-                onChange={(event) => setMass(event.target.value)}
-                className="mt-3 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-base font-semibold text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-              />
-            </label>
-
             <div className="rounded-md border border-blue-100 bg-blue-50 px-4 py-3 text-base font-semibold text-blue-800">
-              목표값: F_net = m · a
+              목표값: 가속도 a
             </div>
 
             <div className="overflow-hidden rounded-md border border-slate-200 bg-white">
@@ -451,7 +435,7 @@ export function LassoPage({ selectedDataset, onBackToBasic }: LassoPageProps) {
               </div>
 
               <div className="flex flex-wrap items-start gap-3">
-                <span className="pt-3 text-xl font-bold text-blue-700">F_net =</span>
+                <span className="pt-3 text-xl font-bold text-blue-700">a ≈</span>
                 {candidateTerms.length === 0 ? (
                   <span className="rounded-md border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-500">
                     입력된 후보 항이 없습니다.
@@ -510,7 +494,7 @@ export function LassoPage({ selectedDataset, onBackToBasic }: LassoPageProps) {
 
               {!hasAcceleration && (
                 <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
-                  가속도 a 값이 없어 목표값 F_net = m · a를 만들 수 없습니다.
+                  가속도 a 값이 없어 목표값을 만들 수 없습니다.
                 </div>
               )}
             </div>
@@ -533,11 +517,11 @@ export function LassoPage({ selectedDataset, onBackToBasic }: LassoPageProps) {
             <label className="block">
               <span className="text-sm font-semibold text-slate-700">모델 선택</span>
               <select
-                value="Lasso 회귀"
+                value="Lasso 피팅"
                 onChange={() => undefined}
                 className="mt-2 w-full rounded-md border border-slate-200 bg-white px-3 py-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
               >
-                <option>Lasso 회귀</option>
+                <option>Lasso 피팅</option>
               </select>
             </label>
 
@@ -621,12 +605,6 @@ export function LassoPage({ selectedDataset, onBackToBasic }: LassoPageProps) {
               {isFitting ? 'Lasso 피팅 중...' : 'Lasso 피팅 실행'}
             </button>
 
-            {!isMassValid && (
-              <p className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
-                질량 m은 숫자로 입력해야 합니다.
-              </p>
-            )}
-
             {!isLambdaValid && (
               <p className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
                 λ 값은 0 이상의 숫자로 입력해야 합니다.
@@ -651,7 +629,7 @@ export function LassoPage({ selectedDataset, onBackToBasic }: LassoPageProps) {
 
             {!fitResult && !fitError && (
               <div className="grid grid-cols-5 gap-4">
-                {['선택된 힘 법칙', '추정된 계수', '제거된 항', '검증 오차', '계수 크기'].map(
+                {['선택된 가속도 모델', '추정된 계수', '제거된 항', '검증 오차', '계수 크기'].map(
                   (title) => (
                     <div
                       key={title}
@@ -669,9 +647,9 @@ export function LassoPage({ selectedDataset, onBackToBasic }: LassoPageProps) {
               <div className="space-y-4">
                 <div className="grid grid-cols-[1.05fr_1.35fr_1fr] gap-4">
                   <div className="rounded-md border border-blue-100 bg-blue-50 p-4">
-                    <p className="text-base font-bold text-blue-900">선택된 힘 법칙</p>
+                    <p className="text-base font-bold text-blue-900">선택된 가속도 모델</p>
                     <p className="mt-3 break-words text-lg font-bold text-blue-800">
-                      {buildSelectedForceLaw(fitResult)}
+                      {buildSelectedAccelerationModel(fitResult)}
                     </p>
                     <div className="mt-4 grid grid-cols-2 gap-3">
                       <div className="rounded-md border border-blue-100 bg-white/70 p-3">
@@ -791,6 +769,11 @@ export function LassoPage({ selectedDataset, onBackToBasic }: LassoPageProps) {
                   />
                   <CoefficientMagnitudeChart result={fitResult} />
                 </div>
+
+                <FitComparisonChart
+                  rows={selectedDataset.rows}
+                  predictions={fitResult.predictions}
+                />
               </div>
             )}
           </div>

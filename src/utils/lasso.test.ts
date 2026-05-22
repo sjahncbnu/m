@@ -1,16 +1,28 @@
 import { describe, expect, it } from 'vitest';
-import { demoDataset } from '../data/demoDataset';
 import type { MotionDataset } from '../types/dataset';
 import {
   buildLogLambdaGrid,
   fitLassoAnalysis,
+  fitLassoAnalysisWithTarget,
   fitLassoRegression,
   formatLassoCoefficient,
 } from './lasso';
 
+const constantAccelerationDataset: MotionDataset = {
+  id: 'constant',
+  name: '상수 가속도',
+  rows: [
+    { t: 0, x: 0, v: 0, a: 9.8 },
+    { t: 1, x: 1, v: 1, a: 9.8 },
+    { t: 2, x: 2, v: 2, a: 9.8 },
+    { t: 3, x: 3, v: 3, a: 9.8 },
+    { t: 4, x: 4, v: 4, a: 9.8 },
+  ],
+};
+
 describe('lasso regression utilities', () => {
-  it('fits the constant net force in browser-safe TypeScript code', () => {
-    const result = fitLassoRegression(['1', 'x', 'v'], demoDataset, 1, {
+  it('fits the constant acceleration in browser-safe TypeScript code', () => {
+    const result = fitLassoRegression(['1', 'x', 'v'], constantAccelerationDataset, {
       lambda: 0.12,
       standardize: true,
     });
@@ -32,7 +44,7 @@ describe('lasso regression utilities', () => {
       ],
     };
 
-    const result = fitLassoRegression(['1', 'x'], dataset, 1, {
+    const result = fitLassoRegression(['1', 'x'], dataset, {
       lambda: 0,
       standardize: true,
     });
@@ -43,7 +55,7 @@ describe('lasso regression utilities', () => {
   });
 
   it('marks small coefficients as removed', () => {
-    const result = fitLassoRegression(['1', 'x', 'v'], demoDataset, 1, {
+    const result = fitLassoRegression(['1', 'x', 'v'], constantAccelerationDataset, {
       lambda: 10,
       standardize: true,
     });
@@ -56,15 +68,15 @@ describe('lasso regression utilities', () => {
 
   it('throws Korean errors for invalid fitting input', () => {
     expect(() =>
-      fitLassoRegression([], demoDataset, 1, { lambda: 0.1, standardize: true }),
+      fitLassoRegression([], constantAccelerationDataset, { lambda: 0.1, standardize: true }),
     ).toThrow('피팅할 후보 항을 하나 이상 입력하세요.');
 
     expect(() =>
-      fitLassoRegression(['1'], demoDataset, Number.NaN, {
+      fitLassoRegression(['a'], constantAccelerationDataset, {
         lambda: 0.1,
         standardize: true,
       }),
-    ).toThrow('질량 m은 숫자로 입력해야 합니다.');
+    ).toThrow('가속도 a는 목표값이므로 후보 항에 사용할 수 없습니다.');
   });
 
   it('builds a logarithmic lambda grid for automatic search', () => {
@@ -76,7 +88,7 @@ describe('lasso regression utilities', () => {
   });
 
   it('selects the best lambda with 5-fold cross-validation', () => {
-    const result = fitLassoAnalysis(['1', 'x', 'v'], demoDataset, 1, {
+    const result = fitLassoAnalysis(['1', 'x', 'v'], constantAccelerationDataset, {
       lambda: 0.12,
       standardize: true,
       autoSearch: true,
@@ -89,5 +101,18 @@ describe('lasso regression utilities', () => {
     expect(result.optimalLambda).toBeGreaterThanOrEqual(0.001);
     expect(result.validationMse).toBeGreaterThanOrEqual(0);
     expect(result.validationMode).toBe('5-fold 교차검증');
+  });
+
+  it('fits Lasso against a custom neural prediction target', () => {
+    const neuralTarget = constantAccelerationDataset.rows.map(() => 9.8);
+    const result = fitLassoAnalysisWithTarget(['1', 'x', 'v'], constantAccelerationDataset, neuralTarget, {
+      lambda: 0.01,
+      standardize: true,
+      autoSearch: false,
+      validationMode: '전체 데이터 사용',
+    });
+
+    expect(result.coefficients[0].coefficient).toBeCloseTo(9.8);
+    expect(result.mae).toBeCloseTo(0);
   });
 });

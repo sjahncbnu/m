@@ -1,6 +1,7 @@
 import { getAxisOption } from '../constants/axisOptions';
 import type { AxisKey } from '../types/axis';
 import type { DatasetRow } from '../types/dataset';
+import { computeNiceAxisDomain, formatTick } from '../utils/niceAxis';
 
 type LineChartProps = {
   rows: DatasetRow[];
@@ -10,41 +11,12 @@ type LineChartProps = {
 
 const chart = {
   width: 640,
-  height: 300,
-  paddingTop: 26,
-  paddingRight: 28,
-  paddingBottom: 48,
-  paddingLeft: 58,
+  height: 380,
+  paddingTop: 34,
+  paddingRight: 34,
+  paddingBottom: 60,
+  paddingLeft: 72,
 };
-
-function formatNumber(value: number) {
-  if (Math.abs(value) >= 100) {
-    return value.toFixed(0);
-  }
-
-  if (Math.abs(value) >= 10) {
-    return value.toFixed(1);
-  }
-
-  return value.toFixed(2).replace(/\.?0+$/, '');
-}
-
-function getDomain(values: number[]) {
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-
-  if (min === max) {
-    const margin = Math.abs(min) > 0 ? Math.abs(min) * 0.1 : 1;
-    return [min - margin, max + margin] as const;
-  }
-
-  const margin = (max - min) * 0.08;
-  return [min - margin, max + margin] as const;
-}
-
-function getTicks(min: number, max: number) {
-  return Array.from({ length: 5 }, (_, index) => min + ((max - min) * index) / 4);
-}
 
 export function LineChart({ rows, xAxis, yAxis }: LineChartProps) {
   const xOption = getAxisOption(xAxis);
@@ -54,7 +26,7 @@ export function LineChart({ rows, xAxis, yAxis }: LineChartProps) {
 
   if (rows.length === 0) {
     return (
-      <div className="flex h-64 items-center justify-center rounded-md border border-dashed border-slate-300 bg-slate-50 text-sm font-semibold text-slate-500">
+      <div className="flex h-[340px] items-center justify-center rounded-md border border-dashed border-slate-300 bg-slate-50 text-sm font-semibold text-slate-500">
         표시할 데이터가 없습니다.
       </div>
     );
@@ -62,17 +34,13 @@ export function LineChart({ rows, xAxis, yAxis }: LineChartProps) {
 
   const xValues = rows.map((row) => row[xAxis]);
   const yValues = rows.map((row) => row[yAxis]);
-  const [xMin, xMax] = getDomain(xValues);
-  const [yMin, yMax] = getDomain(yValues);
-  const xTicks = getTicks(xMin, xMax);
-  const yTicks = getTicks(yMin, yMax);
+  const xDomain = computeNiceAxisDomain(xValues, { targetTickCount: 6 });
+  const yDomain = computeNiceAxisDomain(yValues, { targetTickCount: 6 });
 
   const scaleX = (value: number) =>
-    chart.paddingLeft + ((value - xMin) / (xMax - xMin)) * plotWidth;
+    chart.paddingLeft + ((value - xDomain.min) / (xDomain.max - xDomain.min)) * plotWidth;
   const scaleY = (value: number) =>
-    chart.paddingTop + plotHeight - ((value - yMin) / (yMax - yMin)) * plotHeight;
-
-  const points = rows.map((row) => `${scaleX(row[xAxis])},${scaleY(row[yAxis])}`).join(' ');
+    chart.paddingTop + plotHeight - ((value - yDomain.min) / (yDomain.max - yDomain.min)) * plotHeight;
 
   return (
     <div className="mt-5 rounded-md border border-slate-200 bg-white p-3">
@@ -80,7 +48,7 @@ export function LineChart({ rows, xAxis, yAxis }: LineChartProps) {
         role="img"
         aria-label={`${xOption.label}와 ${yOption.label} 그래프`}
         viewBox={`0 0 ${chart.width} ${chart.height}`}
-        className="h-64 w-full"
+        className="h-[340px] w-full"
       >
         <rect
           x={chart.paddingLeft}
@@ -91,7 +59,7 @@ export function LineChart({ rows, xAxis, yAxis }: LineChartProps) {
           rx="6"
         />
 
-        {xTicks.map((tick) => {
+        {xDomain.ticks.map((tick) => {
           const x = scaleX(tick);
 
           return (
@@ -101,17 +69,17 @@ export function LineChart({ rows, xAxis, yAxis }: LineChartProps) {
                 y1={chart.paddingTop}
                 x2={x}
                 y2={chart.paddingTop + plotHeight}
-                stroke="#e2e8f0"
-                strokeDasharray="4 4"
+                stroke="#e5e7eb"
+                strokeWidth="1"
               />
-              <text x={x} y={chart.height - 22} textAnchor="middle" className="fill-slate-500 text-[12px]">
-                {formatNumber(tick)}
+              <text x={x} y={chart.height - 24} textAnchor="middle" className="fill-slate-500 text-[12px]">
+                {formatTick(tick)}
               </text>
             </g>
           );
         })}
 
-        {yTicks.map((tick) => {
+        {yDomain.ticks.map((tick) => {
           const y = scaleY(tick);
 
           return (
@@ -121,11 +89,11 @@ export function LineChart({ rows, xAxis, yAxis }: LineChartProps) {
                 y1={y}
                 x2={chart.paddingLeft + plotWidth}
                 y2={y}
-                stroke="#e2e8f0"
-                strokeDasharray="4 4"
+                stroke="#e5e7eb"
+                strokeWidth="1"
               />
               <text x={chart.paddingLeft - 12} y={y + 4} textAnchor="end" className="fill-slate-500 text-[12px]">
-                {formatNumber(tick)}
+                {formatTick(tick)}
               </text>
             </g>
           );
@@ -148,14 +116,14 @@ export function LineChart({ rows, xAxis, yAxis }: LineChartProps) {
           strokeWidth="1.5"
         />
 
-        <polyline fill="none" stroke="#2563eb" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" points={points} />
         {rows.map((row, index) => (
           <circle
             key={`${row[xAxis]}-${row[yAxis]}-${index}`}
             cx={scaleX(row[xAxis])}
             cy={scaleY(row[yAxis])}
-            r="3.5"
+            r="2"
             fill="#2563eb"
+            opacity="0.72"
           />
         ))}
 
@@ -163,7 +131,7 @@ export function LineChart({ rows, xAxis, yAxis }: LineChartProps) {
           x={chart.paddingLeft + plotWidth / 2}
           y={chart.height - 4}
           textAnchor="middle"
-          className="fill-slate-700 text-[13px] font-semibold"
+          className="fill-slate-700 text-[15px] font-bold"
         >
           {xOption.label} ({xOption.unit})
         </text>
@@ -172,7 +140,7 @@ export function LineChart({ rows, xAxis, yAxis }: LineChartProps) {
           y={chart.paddingTop + plotHeight / 2}
           textAnchor="middle"
           transform={`rotate(-90 18 ${chart.paddingTop + plotHeight / 2})`}
-          className="fill-slate-700 text-[13px] font-semibold"
+          className="fill-slate-700 text-[15px] font-bold"
         >
           {yOption.label} ({yOption.unit})
         </text>

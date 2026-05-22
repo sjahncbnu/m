@@ -1,1 +1,1 @@
-export type AppView = 'basic' | 'lasso';
+export type AppView = 'data' | 'basicFit' | 'lasso' | 'neural';

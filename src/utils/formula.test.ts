@@ -22,7 +22,7 @@ describe('formula utilities', () => {
     expect(evaluateTerm('v^2', row)).toBe(9);
     expect(evaluateTerm('abs(v)*v', row)).toBe(-9);
     expect(evaluateTerm('sin(x)', row)).toBeCloseTo(Math.sin(2));
-    expect(evaluateTerm('sqrt(a)', row)).toBeCloseTo(Math.sqrt(9.8));
+    expect(evaluateTerm('sqrt(x)', row)).toBeCloseTo(Math.sqrt(2));
   });
 
   it('builds a feature matrix for all rows and terms', () => {
@@ -43,6 +43,12 @@ describe('formula utilities', () => {
 
   it('rejects unsupported variables, functions, and implicit multiplication', () => {
     expect(() => parseTerm('y')).toThrow('지원하지 않는 변수입니다: y');
+    expect(() => parseTerm('a')).toThrow(
+      '가속도 a는 목표값이므로 후보 항에 사용할 수 없습니다.',
+    );
+    expect(() => parseTerm('x*a')).toThrow(
+      '가속도 a는 목표값이므로 후보 항에 사용할 수 없습니다.',
+    );
     expect(() => parseTerm('tan(x)')).toThrow('지원하지 않는 함수입니다: tan');
     expect(() => parseTerm('2x')).toThrow('곱셈은 * 기호로 입력하세요.');
     expect(() => parseTerm('x+')).toThrow('수식 문법이 올바르지 않습니다.');

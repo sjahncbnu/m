@@ -1,5 +1,6 @@
 import { Plus, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { FitComparisonChart } from './charts/FitComparisonChart';
 import type { MotionDataset } from '../types/dataset';
 import { buildFeatureMatrix, parseTerm } from '../utils/formula';
 import {
@@ -8,16 +9,16 @@ import {
   type OlsFitResult,
 } from '../utils/ols';
 
-const defaultTerms = ['1', 'x', 'v', 'v^2', 'x*v'];
+const defaultTerms = ['1', 'x', 'v', 'x^2', 'v^2', 'x*v'];
 
 function buildModelPreview(terms: string[]) {
   const visibleTerms = terms.map((term) => term.trim() || '(빈 항)');
 
   if (visibleTerms.length === 0) {
-    return 'F_net = 항 없음';
+    return 'a = 항 없음';
   }
 
-  return `F_net = ${visibleTerms
+  return `a = ${visibleTerms
     .map((term, index) => `c${index}·${term}`)
     .join(' + ')}`;
 }
@@ -31,8 +32,8 @@ function formatCoefficient(value: number) {
 }
 
 function buildFittedModel(terms: string[], coefficients: number[]) {
-  return `F_net = ${coefficients
-    .map((coefficient, index) => `${formatCoefficient(coefficient)}·${terms[index].trim()}`)
+  return `a = ${coefficients
+    .map((coefficient, index) => `${formatCoefficient(coefficient)}·${terms[index]?.trim() ?? '(삭제된 항)'}`)
     .join(' + ')}`;
 }
 
@@ -41,7 +42,6 @@ type NetForcePanelProps = {
 };
 
 export function NetForcePanel({ dataset }: NetForcePanelProps) {
-  const [mass, setMass] = useState('1.00');
   const [terms, setTerms] = useState(defaultTerms);
   const [fitResult, setFitResult] = useState<OlsFitResult | null>(null);
   const [fitError, setFitError] = useState<string | null>(null);
@@ -55,35 +55,38 @@ export function NetForcePanel({ dataset }: NetForcePanelProps) {
     }
   });
   const hasInvalidTerms = termErrors.some(Boolean);
-  const parsedMass = Number(mass);
-  const isMassValid = mass.trim() !== '' && Number.isFinite(parsedMass);
   const hasAcceleration = hasAccelerationValues(dataset);
-  const canFit =
-    terms.length > 0 && !hasInvalidTerms && isMassValid && hasAcceleration && dataset.rows.length > 0;
+  const canFit = terms.length > 0 && !hasInvalidTerms && hasAcceleration && dataset.rows.length > 0;
 
   useEffect(() => {
     setFitResult(null);
     setFitError(null);
-  }, [dataset.id, mass, terms]);
+  }, [dataset.id, terms]);
 
   const updateTerm = (index: number, value: string) => {
+    setFitResult(null);
+    setFitError(null);
     setTerms((currentTerms) =>
       currentTerms.map((term, termIndex) => (termIndex === index ? value : term)),
     );
   };
 
   const addTerm = () => {
+    setFitResult(null);
+    setFitError(null);
     setTerms((currentTerms) => [...currentTerms, '']);
   };
 
   const deleteTerm = (index: number) => {
+    setFitResult(null);
+    setFitError(null);
     setTerms((currentTerms) => currentTerms.filter((_, termIndex) => termIndex !== index));
   };
 
   const runFit = () => {
     try {
       setFitError(null);
-      setFitResult(fitOrdinaryLeastSquares(terms, dataset, parsedMass));
+      setFitResult(fitOrdinaryLeastSquares(terms, dataset));
     } catch (error) {
       setFitResult(null);
       setFitError(
@@ -96,22 +99,8 @@ export function NetForcePanel({ dataset }: NetForcePanelProps) {
 
   return (
     <div className="mt-5 space-y-5">
-      <div className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
-        <label className="rounded-md border border-slate-200 bg-slate-50 p-4">
-          <span className="block text-sm font-semibold text-slate-700">질량 m (kg)</span>
-          <input
-            type="number"
-            min="0"
-            step="0.01"
-            value={mass}
-            onChange={(event) => setMass(event.target.value)}
-            className="mt-3 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-base font-semibold text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-          />
-        </label>
-
-        <div className="flex items-center rounded-md border border-blue-100 bg-blue-50 px-4 py-4 text-base font-semibold text-blue-800">
-          목표값: F_net = m · a
-        </div>
+      <div className="flex items-center rounded-md border border-blue-100 bg-blue-50 px-4 py-4 text-base font-semibold text-blue-800">
+        목표값: 가속도 a
       </div>
 
       <div className="rounded-md border border-slate-200 bg-white p-4">
@@ -135,13 +124,13 @@ export function NetForcePanel({ dataset }: NetForcePanelProps) {
                   : 'cursor-not-allowed bg-slate-300 text-slate-100'
               }`}
             >
-              모델 피팅
+              기본 피팅 실행
             </button>
           </div>
         </div>
 
         <div className="flex flex-wrap items-start gap-3">
-          <span className="text-xl font-bold text-blue-700">F_net =</span>
+          <span className="text-xl font-bold text-blue-700">a =</span>
           {terms.length === 0 ? (
             <span className="rounded-md border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-500">
               입력된 항이 없습니다.
@@ -194,20 +183,14 @@ export function NetForcePanel({ dataset }: NetForcePanelProps) {
 
         {hasInvalidTerms && (
           <div className="mt-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
-            올바르지 않은 항이 있습니다. 지원 변수는 t, x, v, a이며 지원 함수는 abs, sin,
+            올바르지 않은 항이 있습니다. 지원 변수는 t, x, v이며 지원 함수는 abs, sin,
             cos, exp, log, sqrt입니다. 현재 데이터셋에서 계산 가능한 항만 사용할 수 있습니다.
           </div>
         )}
 
         {!hasAcceleration && (
           <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
-            가속도 a 값이 없어 목표값 F_net = m · a를 만들 수 없습니다.
-          </div>
-        )}
-
-        {!isMassValid && (
-          <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
-            질량 m은 숫자로 입력해야 합니다.
+            가속도 a 값이 없어 목표값을 만들 수 없습니다.
           </div>
         )}
       </div>
@@ -218,7 +201,7 @@ export function NetForcePanel({ dataset }: NetForcePanelProps) {
           {buildModelPreview(terms)}
         </p>
         <p className="mt-2 text-sm font-medium text-slate-500">
-          계수 c0, c1, c2, ...는 이후 단계에서 추정됩니다.
+          계수 c0, c1, c2, ...는 모델 피팅 시 추정됩니다.
         </p>
       </div>
 
@@ -232,12 +215,12 @@ export function NetForcePanel({ dataset }: NetForcePanelProps) {
         <div className="rounded-md border border-blue-100 bg-white px-4 py-4">
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
             <div>
-              <p className="text-sm font-semibold text-slate-600">추정된 모델</p>
+              <p className="text-sm font-semibold text-slate-600">추정된 가속도 식</p>
               <p className="mt-2 break-words text-lg font-bold text-blue-800">
                 {buildFittedModel(terms, fitResult.coefficients)}
               </p>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
                 <p className="text-xs font-semibold text-slate-500">R²</p>
                 <p className="mt-1 text-xl font-bold text-slate-900">
@@ -248,6 +231,12 @@ export function NetForcePanel({ dataset }: NetForcePanelProps) {
                 <p className="text-xs font-semibold text-slate-500">MAE</p>
                 <p className="mt-1 text-xl font-bold text-slate-900">
                   {fitResult.mae.toFixed(4)}
+                </p>
+              </div>
+              <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs font-semibold text-slate-500">MSE</p>
+                <p className="mt-1 text-xl font-bold text-slate-900">
+                  {fitResult.mse.toFixed(4)}
                 </p>
               </div>
             </div>
@@ -275,7 +264,7 @@ export function NetForcePanel({ dataset }: NetForcePanelProps) {
                       c{index}
                     </td>
                     <td className="border-b border-slate-100 px-3 py-2 font-medium text-slate-700">
-                      {terms[index].trim()}
+                      {terms[index]?.trim() ?? '(삭제된 항)'}
                     </td>
                     <td className="border-b border-slate-100 px-3 py-2 text-right font-semibold text-blue-700">
                       {formatCoefficient(coefficient)}
@@ -284,6 +273,10 @@ export function NetForcePanel({ dataset }: NetForcePanelProps) {
                 ))}
               </tbody>
             </table>
+          </div>
+
+          <div className="mt-4">
+            <FitComparisonChart rows={dataset.rows} predictions={fitResult.predictions} />
           </div>
         </div>
       )}

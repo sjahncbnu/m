@@ -8,6 +8,7 @@ export type OlsFitResult = {
   predictions: number[];
   rSquared: number;
   mae: number;
+  mse: number;
 };
 
 export class OlsError extends Error {
@@ -24,12 +25,12 @@ export function hasAccelerationValues(dataset: MotionDataset) {
   );
 }
 
-function buildTargetVector(dataset: MotionDataset, mass: number) {
+function buildTargetVector(dataset: MotionDataset) {
   if (!hasAccelerationValues(dataset)) {
     throw new OlsError('가속도 a 값이 없어 목표값을 만들 수 없습니다.');
   }
 
-  return dataset.rows.map((row) => mass * row.a);
+  return dataset.rows.map((row) => row.a);
 }
 
 function transposeMultiplyMatrix(matrix: number[][]) {
@@ -135,19 +136,18 @@ function calculateMae(targets: number[], predictions: number[]) {
   );
 }
 
-export function fitOrdinaryLeastSquares(
-  terms: string[],
-  dataset: MotionDataset,
-  mass: number,
-): OlsFitResult {
+function calculateMse(targets: number[], predictions: number[]) {
+  return (
+    targets.reduce((sum, value, index) => sum + (value - predictions[index]) ** 2, 0) /
+    targets.length
+  );
+}
+
+export function fitOrdinaryLeastSquares(terms: string[], dataset: MotionDataset): OlsFitResult {
   const activeTerms = terms.map((term) => term.trim()).filter(Boolean);
 
   if (activeTerms.length === 0) {
     throw new OlsError('피팅할 항을 하나 이상 입력하세요.');
-  }
-
-  if (!Number.isFinite(mass)) {
-    throw new OlsError('질량 m은 숫자로 입력해야 합니다.');
   }
 
   if (dataset.rows.length === 0) {
@@ -159,7 +159,7 @@ export function fitOrdinaryLeastSquares(
   }
 
   const featureMatrix = buildFeatureMatrix(activeTerms, dataset);
-  const targetVector = buildTargetVector(dataset, mass);
+  const targetVector = buildTargetVector(dataset);
   const normalMatrix = transposeMultiplyMatrix(featureMatrix);
   const normalVector = transposeMultiplyVector(featureMatrix, targetVector);
   const coefficients = solveLinearSystem(normalMatrix, normalVector);
@@ -170,5 +170,6 @@ export function fitOrdinaryLeastSquares(
     predictions,
     rSquared: calculateRSquared(targetVector, predictions),
     mae: calculateMae(targetVector, predictions),
+    mse: calculateMse(targetVector, predictions),
   };
 }

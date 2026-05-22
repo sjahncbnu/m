@@ -1,7 +1,7 @@
 import { parse, type MathNode } from 'mathjs/number';
 import type { DatasetRow, MotionDataset } from '../types/dataset';
 
-const allowedVariables = new Set(['t', 'x', 'v', 'a']);
+const allowedVariables = new Set(['t', 'x', 'v']);
 const allowedOperators = new Set(['+', '-', '*', '/', '^']);
 const allowedFunctions = {
   abs: Math.abs,
@@ -72,6 +72,10 @@ function validateNode(node: MathNode) {
 
     case 'SymbolNode': {
       const name = getNodeName(node);
+
+      if (name === 'a') {
+        throw new FormulaError('가속도 a는 목표값이므로 후보 항에 사용할 수 없습니다.');
+      }
 
       if (!name || !allowedVariables.has(name)) {
         throw new FormulaError(`지원하지 않는 변수입니다: ${name ?? '알 수 없음'}`);

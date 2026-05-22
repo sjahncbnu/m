@@ -70,12 +70,12 @@ function softThreshold(value: number, lambda: number) {
   return 0;
 }
 
-function getTargetVector(dataset: MotionDataset, mass: number) {
+function getTargetVector(dataset: MotionDataset) {
   if (!hasAccelerationValues(dataset)) {
     throw new LassoError('가속도 a 값이 없어 목표값을 만들 수 없습니다.');
   }
 
-  return dataset.rows.map((row) => mass * row.a);
+  return dataset.rows.map((row) => row.a);
 }
 
 function mean(values: number[]) {
@@ -314,23 +314,31 @@ function getFoldIndexes(rowCount: number, requestedFoldCount: number) {
 function getValidationMseForFullDataset(
   terms: string[],
   dataset: MotionDataset,
-  mass: number,
   options: LassoFitOptions,
 ) {
-  const result = fitLassoRegression(terms, dataset, mass, options);
-  const targets = getTargetVector(dataset, mass);
+  const result = fitLassoRegression(terms, dataset, options);
+  const targets = getTargetVector(dataset);
   return calculateMse(targets, result.predictions);
+}
+
+function getValidationMseForTarget(
+  terms: string[],
+  dataset: MotionDataset,
+  targetVector: number[],
+  options: LassoFitOptions,
+) {
+  const result = fitLassoRegressionWithTarget(terms, dataset, targetVector, options);
+  return calculateMse(targetVector, result.predictions);
 }
 
 function getCrossValidationMse(
   terms: string[],
   dataset: MotionDataset,
-  mass: number,
   options: LassoFitOptions,
   foldCount: number,
 ) {
   if (dataset.rows.length < 2) {
-    return getValidationMseForFullDataset(terms, dataset, mass, options);
+    return getValidationMseForFullDataset(terms, dataset, options);
   }
 
   const folds = getFoldIndexes(dataset.rows.length, foldCount);
@@ -356,14 +364,14 @@ function getCrossValidationMse(
       validationIndexes,
       `validation-${foldIndex}`,
     );
-    const fit = fitLassoRegression(terms, trainDataset, mass, options);
+    const fit = fitLassoRegression(terms, trainDataset, options);
     const predictions = predictDatasetRows(
       terms.map((term) => term.trim()).filter(Boolean),
       validationDataset,
       fit.coefficients.map((coefficient) => coefficient.coefficient),
       fit.interceptOffset,
     );
-    const targets = getTargetVector(validationDataset, mass);
+    const targets = getTargetVector(validationDataset);
     const foldMse = calculateMse(targets, predictions);
 
     weightedMseSum += foldMse * validationIndexes.length;
@@ -371,7 +379,63 @@ function getCrossValidationMse(
   });
 
   if (validationRowCount === 0) {
-    return getValidationMseForFullDataset(terms, dataset, mass, options);
+    return getValidationMseForFullDataset(terms, dataset, options);
+  }
+
+  return weightedMseSum / validationRowCount;
+}
+
+function getCrossValidationMseForTarget(
+  terms: string[],
+  dataset: MotionDataset,
+  targetVector: number[],
+  options: LassoFitOptions,
+  foldCount: number,
+) {
+  if (dataset.rows.length < 2) {
+    return getValidationMseForTarget(terms, dataset, targetVector, options);
+  }
+
+  const folds = getFoldIndexes(dataset.rows.length, foldCount);
+  const allIndexes = dataset.rows.map((_, index) => index);
+  let weightedMseSum = 0;
+  let validationRowCount = 0;
+
+  folds.forEach((validationIndexes, foldIndex) => {
+    if (validationIndexes.length === 0) {
+      return;
+    }
+
+    const validationIndexSet = new Set(validationIndexes);
+    const trainIndexes = allIndexes.filter((index) => !validationIndexSet.has(index));
+
+    if (trainIndexes.length === 0) {
+      return;
+    }
+
+    const trainDataset = createDatasetSlice(dataset, trainIndexes, `train-target-${foldIndex}`);
+    const validationDataset = createDatasetSlice(
+      dataset,
+      validationIndexes,
+      `validation-target-${foldIndex}`,
+    );
+    const trainTargets = trainIndexes.map((index) => targetVector[index]);
+    const validationTargets = validationIndexes.map((index) => targetVector[index]);
+    const fit = fitLassoRegressionWithTarget(terms, trainDataset, trainTargets, options);
+    const predictions = predictDatasetRows(
+      terms.map((term) => term.trim()).filter(Boolean),
+      validationDataset,
+      fit.coefficients.map((coefficient) => coefficient.coefficient),
+      fit.interceptOffset,
+    );
+    const foldMse = calculateMse(validationTargets, predictions);
+
+    weightedMseSum += foldMse * validationIndexes.length;
+    validationRowCount += validationIndexes.length;
+  });
+
+  if (validationRowCount === 0) {
+    return getValidationMseForTarget(terms, dataset, targetVector, options);
   }
 
   return weightedMseSum / validationRowCount;
@@ -380,17 +444,21 @@ function getCrossValidationMse(
 export function fitLassoRegression(
   terms: string[],
   dataset: MotionDataset,
-  mass: number,
+  options: LassoFitOptions,
+): LassoFitResult {
+  return fitLassoRegressionWithTarget(terms, dataset, getTargetVector(dataset), options);
+}
+
+export function fitLassoRegressionWithTarget(
+  terms: string[],
+  dataset: MotionDataset,
+  targetVector: number[],
   options: LassoFitOptions,
 ): LassoFitResult {
   const activeTerms = terms.map((term) => term.trim()).filter(Boolean);
 
   if (activeTerms.length === 0) {
     throw new LassoError('피팅할 후보 항을 하나 이상 입력하세요.');
-  }
-
-  if (!Number.isFinite(mass)) {
-    throw new LassoError('질량 m은 숫자로 입력해야 합니다.');
   }
 
   if (!Number.isFinite(options.lambda) || options.lambda < 0) {
@@ -401,8 +469,15 @@ export function fitLassoRegression(
     throw new LassoError('피팅할 데이터 행이 없습니다.');
   }
 
+  if (targetVector.length !== dataset.rows.length) {
+    throw new LassoError('목표값 개수가 데이터 행 수와 일치하지 않습니다.');
+  }
+
+  if (!targetVector.every(Number.isFinite)) {
+    throw new LassoError('목표값에 유효하지 않은 숫자가 포함되어 있습니다.');
+  }
+
   const rawFeatures = buildFeatureMatrix(activeTerms, dataset);
-  const targets = getTargetVector(dataset, mass);
   const { features, means, scales, interceptIndex } = prepareFeatures(
     rawFeatures,
     activeTerms,
@@ -410,7 +485,7 @@ export function fitLassoRegression(
   );
   const scaledCoefficients = coordinateDescent(
     features,
-    targets,
+    targetVector,
     options.lambda,
     interceptIndex,
     options.maxIterations ?? 5000,
@@ -444,8 +519,8 @@ export function fitLassoRegression(
   return {
     coefficients: coefficientRows,
     predictions,
-    rSquared: calculateRSquared(targets, predictions),
-    mae: calculateMae(targets, predictions),
+    rSquared: calculateRSquared(targetVector, predictions),
+    mae: calculateMae(targetVector, predictions),
     selectedTerms,
     removedTerms,
     selectedTermCount: selectedTerms.length,
@@ -457,7 +532,6 @@ export function fitLassoRegression(
 export function fitLassoAnalysis(
   terms: string[],
   dataset: MotionDataset,
-  mass: number,
   options: LassoAnalysisOptions,
 ): LassoAnalysisResult {
   const lambdaGrid = options.autoSearch
@@ -477,7 +551,6 @@ export function fitLassoAnalysis(
         ? getCrossValidationMse(
             terms,
             dataset,
-            mass,
             {
               lambda,
               standardize: options.standardize,
@@ -486,7 +559,7 @@ export function fitLassoAnalysis(
             },
             options.foldCount ?? 5,
           )
-        : getValidationMseForFullDataset(terms, dataset, mass, {
+        : getValidationMseForFullDataset(terms, dataset, {
             lambda,
             standardize: options.standardize,
             maxIterations: options.maxIterations,
@@ -497,7 +570,66 @@ export function fitLassoAnalysis(
   const bestPoint = validationCurve.reduce((best, point) =>
     point.validationMse < best.validationMse ? point : best,
   );
-  const finalResult = fitLassoRegression(terms, dataset, mass, {
+  const finalResult = fitLassoRegression(terms, dataset, {
+    lambda: bestPoint.lambda,
+    standardize: options.standardize,
+    maxIterations: options.maxIterations,
+    tolerance: options.tolerance,
+  });
+
+  return {
+    ...finalResult,
+    optimalLambda: bestPoint.lambda,
+    validationMse: bestPoint.validationMse,
+    validationCurve,
+    validationMode: options.validationMode,
+  };
+}
+
+export function fitLassoAnalysisWithTarget(
+  terms: string[],
+  dataset: MotionDataset,
+  targetVector: number[],
+  options: LassoAnalysisOptions,
+): LassoAnalysisResult {
+  const lambdaGrid = options.autoSearch
+    ? (options.lambdaGrid ?? buildLogLambdaGrid()).filter(
+        (lambda) => Number.isFinite(lambda) && lambda >= 0,
+      )
+    : [options.lambda];
+
+  if (lambdaGrid.length === 0) {
+    throw new LassoError('탐색할 λ 후보가 없습니다.');
+  }
+
+  const validationCurve = lambdaGrid.map((lambda) => ({
+    lambda,
+    validationMse:
+      options.validationMode === '5-fold 교차검증'
+        ? getCrossValidationMseForTarget(
+            terms,
+            dataset,
+            targetVector,
+            {
+              lambda,
+              standardize: options.standardize,
+              maxIterations: options.maxIterations,
+              tolerance: options.tolerance,
+            },
+            options.foldCount ?? 5,
+          )
+        : getValidationMseForTarget(terms, dataset, targetVector, {
+            lambda,
+            standardize: options.standardize,
+            maxIterations: options.maxIterations,
+            tolerance: options.tolerance,
+          }),
+  }));
+
+  const bestPoint = validationCurve.reduce((best, point) =>
+    point.validationMse < best.validationMse ? point : best,
+  );
+  const finalResult = fitLassoRegressionWithTarget(terms, dataset, targetVector, {
     lambda: bestPoint.lambda,
     standardize: options.standardize,
     maxIterations: options.maxIterations,
