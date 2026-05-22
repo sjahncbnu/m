@@ -2,26 +2,33 @@ import { describe, expect, it, vi } from 'vitest';
 import { builtInDatasets } from './builtinDatasets';
 import {
   buildProcessedDataset,
-  defaultDerivativeSettings,
   type DerivativeSettings,
 } from '../utils/derivatives';
 
 const expectedDatasetNames = [
-  '자유낙하 운동 - 이상 데이터',
-  '자유낙하 운동 - 약한 노이즈',
-  '등속 운동',
   '등가속도 운동',
-  '용수철 운동',
-  '약한 노이즈 등가속도 운동',
-  '중간 노이즈 자유낙하 운동',
-  '감쇠 용수철 운동',
-  '비선형 용수철 운동',
-  '감쇠 비선형 용수철 운동',
-  '공기저항이 있는 낙하 운동',
-  '외력이 있는 감쇠 진동',
-  '큰 각도 단진자 운동',
-  '마찰이 있는 미끄럼 운동',
-  '구간별 힘 변화 운동',
+  '낙하 + 선형저항',
+  '단순 용수철',
+  '매달린 용수철',
+  '점성감쇠 진동',
+  '낙하 + 이차저항',
+  '강제 진동',
+  '용수철 + 쿨롱 마찰',
+  '비대칭 용수철',
+  'Duffing 진동자',
+  '점성 + 쿨롱 감쇠',
+  'Van der Pol 진동자',
+  '이차저항 진동',
+  '비대칭 + 점성감쇠 용수철',
+  'Duffing + 점성감쇠',
+  'Duffing + 강제진동',
+  'Duffing + 점성감쇠 + 강제진동',
+  '비대칭 + 점성 + 쿨롱',
+  '비대칭 + 이차저항',
+  '점성 + 이차저항 진동',
+  '점성 + 쿨롱 + 이차저항',
+  '비대칭 Duffing형 감쇠 진동',
+  '거의 다 넣은 일반 모델',
 ];
 
 const smoothingSettings: DerivativeSettings = {
@@ -29,20 +36,6 @@ const smoothingSettings: DerivativeSettings = {
   windowLength: 101,
   polynomialOrder: 3,
 };
-
-function centerRows(datasetId: string) {
-  const rawDataset = builtInDatasets.find((dataset) => dataset.id === datasetId);
-
-  if (!rawDataset) {
-    throw new Error(`테스트 데이터셋을 찾을 수 없습니다: ${datasetId}`);
-  }
-
-  const processedDataset = buildProcessedDataset(rawDataset, defaultDerivativeSettings);
-  const start = Math.floor(processedDataset.rows.length * 0.1);
-  const end = Math.floor(processedDataset.rows.length * 0.9);
-
-  return processedDataset.rows.slice(start, end);
-}
 
 function mean(values: number[]) {
   return values.reduce((sum, value) => sum + value, 0) / values.length;
@@ -62,11 +55,12 @@ function meanAbsoluteError(values: number[], expectedValues: number[]) {
   return mean(values.map((value, index) => Math.abs(value - expectedValues[index])));
 }
 
-describe('built-in raw datasets', () => {
-  it('provides the required deterministic 1000-row raw datasets', () => {
+describe('built-in raw physics datasets', () => {
+  it('provides the requested deterministic 1000-row raw datasets', () => {
     expect(builtInDatasets.map((dataset) => dataset.name)).toEqual(expectedDatasetNames);
 
-    builtInDatasets.forEach((dataset) => {
+    builtInDatasets.forEach((dataset, index) => {
+      expect(dataset.difficulty).toBe(index + 1);
       expect(dataset.rawRows).toHaveLength(1000);
       expect(dataset.rawColumns).toEqual(['t', 'x']);
       expect(dataset.units).toEqual({ t: 's', x: 'm' });
@@ -76,103 +70,47 @@ describe('built-in raw datasets', () => {
     });
   });
 
-  it('keeps deterministic noisy rows stable for representative datasets', async () => {
+  it('keeps generated rows deterministic', async () => {
     vi.resetModules();
     const freshModule = await import('./builtinDatasets');
-    const noisyConstant = builtInDatasets.find(
-      (dataset) => dataset.id === 'weak-noise-constant-acceleration',
-    );
-    const freshNoisyConstant = freshModule.builtInDatasets.find(
-      (dataset) => dataset.id === 'weak-noise-constant-acceleration',
-    );
-    const dampedSpring = builtInDatasets.find((dataset) => dataset.id === 'damped-spring');
-    const freshDampedSpring = freshModule.builtInDatasets.find(
-      (dataset) => dataset.id === 'damped-spring',
-    );
 
-    expect(freshNoisyConstant?.rawRows[0]).toEqual(noisyConstant?.rawRows[0]);
-    expect(freshNoisyConstant?.rawRows[500]).toEqual(noisyConstant?.rawRows[500]);
-    expect(freshDampedSpring?.rawRows[500]).toEqual(dampedSpring?.rawRows[500]);
-  });
+    builtInDatasets.forEach((dataset) => {
+      const freshDataset = freshModule.builtInDatasets.find((item) => item.id === dataset.id);
 
-  it('derives expected acceleration behavior from representative datasets', () => {
-    expect(mean(centerRows('free-fall-ideal').map((row) => row.a))).toBeCloseTo(9.8, 1);
-    expect(mean(centerRows('uniform-motion').map((row) => row.a))).toBeCloseTo(0, 1);
-    expect(mean(centerRows('constant-acceleration').map((row) => row.a))).toBeCloseTo(2, 1);
-
-    const springRows = centerRows('spring-motion');
-    const relationError = mean(springRows.map((row) => Math.abs(row.a + 4 * row.x)));
-
-    expect(relationError).toBeLessThan(0.05);
-  });
-
-  it('removes derivative boundary artifacts from processed fitting rows', () => {
-    const rawDataset = builtInDatasets.find((dataset) => dataset.id === 'free-fall-ideal');
-
-    if (!rawDataset) {
-      throw new Error('이상 자유낙하 데이터셋을 찾을 수 없습니다.');
-    }
-
-    const processedDataset = buildProcessedDataset(rawDataset, defaultDerivativeSettings);
-    const accelerations = processedDataset.rows.map((row) => row.a);
-
-    expect(processedDataset.rows.length).toBe(rawDataset.rawRows.length - 4);
-    expect(Math.min(...accelerations)).toBeGreaterThan(9.7);
-    expect(Math.max(...accelerations)).toBeLessThan(9.9);
-  });
-
-  it('stabilizes weak-noise free fall acceleration with Savitzky-Golay differentiation', () => {
-    const rawDataset = builtInDatasets.find((dataset) => dataset.id === 'free-fall-noisy');
-
-    if (!rawDataset) {
-      throw new Error('약한 노이즈 자유낙하 데이터셋을 찾을 수 없습니다.');
-    }
-
-    const processedDataset = buildProcessedDataset(rawDataset, {
-      method: 'Savitzky-Golay 필터 + 미분',
-      windowLength: 101,
-      polynomialOrder: 2,
+      expect(freshDataset?.rawRows[0]).toEqual(dataset.rawRows[0]);
+      expect(freshDataset?.rawRows[500]).toEqual(dataset.rawRows[500]);
+      expect(freshDataset?.rawRows[999]).toEqual(dataset.rawRows[999]);
     });
-    const centerAcceleration = processedDataset.rows
-      .slice(100, 900)
-      .map((row) => row.a);
-    const largestDeviation = Math.max(
-      ...centerAcceleration.map((acceleration) => Math.abs(acceleration - 9.8)),
-    );
-
-    expect(mean(centerAcceleration)).toBeCloseTo(9.8, 0);
-    expect(largestDeviation).toBeLessThan(3);
   });
 
-  it('derives expected behavior from new noisy physics datasets after smoothing', () => {
-    const weakConstantRows = processedRows('weak-noise-constant-acceleration');
-    const mediumFreeFallRows = processedRows('medium-noise-free-fall');
-    const dampedSpringRows = processedRows('damped-spring');
-    const nonlinearRows = processedRows('nonlinear-spring');
-    const airRows = processedRows('air-resistance-fall');
-    const pendulumRows = processedRows('large-angle-pendulum');
+  it('derives expected acceleration behavior from representative models after smoothing', () => {
+    const constantRows = processedRows('constant-force-motion');
+    const simpleSpringRows = processedRows('simple-spring');
+    const dampedRows = processedRows('viscous-damped-oscillation');
+    const quadraticFallRows = processedRows('fall-quadratic-drag');
+    const duffingRows = processedRows('duffing-oscillator');
 
-    expect(mean(weakConstantRows.map((row) => row.a))).toBeCloseTo(2, 0);
-    expect(mean(mediumFreeFallRows.map((row) => row.a))).toBeCloseTo(9.8, 0);
-
+    expect(mean(constantRows.map((row) => row.a))).toBeCloseTo(2, 0);
     expect(
       meanAbsoluteError(
-        dampedSpringRows.map((row) => row.a),
-        dampedSpringRows.map((row) => -4 * row.x - 0.45 * row.v),
+        simpleSpringRows.map((row) => row.a),
+        simpleSpringRows.map((row) => -4 * row.x),
       ),
-    ).toBeLessThan(2);
+    ).toBeLessThan(1.2);
     expect(
       meanAbsoluteError(
-        nonlinearRows.map((row) => row.a),
-        nonlinearRows.map((row) => -3 * row.x - 1.2 * row.x ** 3),
+        dampedRows.map((row) => row.a),
+        dampedRows.map((row) => -4 * row.x - 0.45 * row.v),
       ),
-    ).toBeLessThan(2.5);
-    expect(airRows.every((row) => Number.isFinite(row.a) && Number.isFinite(row.v))).toBe(true);
+    ).toBeLessThan(1.4);
+    expect(quadraticFallRows.every((row) => Number.isFinite(row.a) && Number.isFinite(row.v))).toBe(
+      true,
+    );
     expect(
       meanAbsoluteError(
-        pendulumRows.map((row) => row.a),
-        pendulumRows.map((row) => -9.8 * Math.sin(row.x)),
+        duffingRows.map((row) => row.a),
+        duffingRows.map((row) => -3 * row.x - row.x ** 3),
       ),
-    ).toBeLessThan(3);
+    ).toBeLessThan(1.6);
   });
 });

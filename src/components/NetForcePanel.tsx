@@ -184,7 +184,7 @@ export function NetForcePanel({ dataset }: NetForcePanelProps) {
         {hasInvalidTerms && (
           <div className="mt-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
             올바르지 않은 항이 있습니다. 지원 변수는 t, x, v이며 지원 함수는 abs, sin,
-            cos, exp, log, sqrt입니다. 현재 데이터셋에서 계산 가능한 항만 사용할 수 있습니다.
+            cos, exp, log, sign, sqrt입니다. 현재 데이터셋에서 계산 가능한 항만 사용할 수 있습니다.
           </div>
         )}
 

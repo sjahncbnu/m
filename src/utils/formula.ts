@@ -9,6 +9,7 @@ const allowedFunctions = {
   cos: Math.cos,
   exp: Math.exp,
   log: Math.log,
+  sign: Math.sign,
   sqrt: Math.sqrt,
 } satisfies Record<string, (value: number) => number>;
 

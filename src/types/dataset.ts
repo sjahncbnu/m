@@ -11,22 +11,7 @@ export type RawMotionDataset = {
   id: string;
   name: string;
   description: string;
-  motionType:
-    | 'free-fall'
-    | 'free-fall-noisy'
-    | 'uniform'
-    | 'constant-acceleration'
-    | 'spring'
-    | 'constant-acceleration-noisy'
-    | 'medium-noise-free-fall'
-    | 'damped-spring'
-    | 'nonlinear-spring'
-    | 'damped-nonlinear-spring'
-    | 'air-resistance-fall'
-    | 'driven-damped-oscillation'
-    | 'large-angle-pendulum'
-    | 'friction-sliding'
-    | 'piecewise-force';
+  motionType: string;
   difficulty?: number;
   trueLaw?: string;
   recommendedTerms?: string[];

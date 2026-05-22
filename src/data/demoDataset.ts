@@ -1,4 +1,4 @@
 export {
   builtInDatasets,
-  freeFallIdealDataset as demoDataset,
+  defaultDataset as demoDataset,
 } from './builtinDatasets';

@@ -507,7 +507,7 @@ export function LassoPage({ selectedDataset, onBackToData }: LassoPageProps) {
             </div>
 
             <p className="rounded-md border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-800">
-              예시: 1, x, v, x^2, v^2, x*v, abs(v)*v, sin(x)
+              예시: 1, x, v, x^2, v^2, x*v, abs(v)*v, sign(v), sin(x)
             </p>
           </div>
         </PlaceholderCard>

@@ -42,21 +42,25 @@ export default function App() {
         onReset={handleReset}
       />
       <ViewTabs currentView={currentView} onChange={setCurrentView} />
-      {currentView === 'data' && (
+      <div className={currentView === 'data' ? 'block' : 'hidden'}>
         <DataAnalysisPage
           sourceDataset={selectedDataset}
           processedDataset={processedDataset}
           onProcessedDatasetChange={setProcessedDataset}
         />
-      )}
-      {currentView === 'basicFit' && <BasicFittingPage dataset={processedDataset} />}
-      {currentView === 'lasso' && (
+      </div>
+      <div className={currentView === 'basicFit' ? 'block' : 'hidden'}>
+        <BasicFittingPage dataset={processedDataset} />
+      </div>
+      <div className={currentView === 'lasso' ? 'block' : 'hidden'}>
         <LassoPage
           selectedDataset={processedDataset}
           onBackToData={() => setCurrentView('data')}
         />
-      )}
-      {currentView === 'neural' && <NeuralNetworkPage selectedDataset={processedDataset} />}
+      </div>
+      <div className={currentView === 'neural' ? 'block' : 'hidden'}>
+        <NeuralNetworkPage selectedDataset={processedDataset} />
+      </div>
     </div>
   );
 }

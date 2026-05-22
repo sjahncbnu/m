@@ -11,7 +11,7 @@ const row = {
 
 describe('formula utilities', () => {
   it('supports the allowed example terms', () => {
-    ['1', 'x', 'v', 'v^2', 'x*v', 'abs(v)*v', 'sin(x)'].forEach((term) => {
+    ['1', 'x', 'v', 'v^2', 'x*v', 'abs(v)*v', 'sin(x)', 'sign(v)'].forEach((term) => {
       expect(() => parseTerm(term)).not.toThrow();
     });
   });
@@ -22,7 +22,15 @@ describe('formula utilities', () => {
     expect(evaluateTerm('v^2', row)).toBe(9);
     expect(evaluateTerm('abs(v)*v', row)).toBe(-9);
     expect(evaluateTerm('sin(x)', row)).toBeCloseTo(Math.sin(2));
+    expect(evaluateTerm('sign(v)', row)).toBe(-1);
+    expect(evaluateTerm('sign(t - 0.25)', row)).toBe(1);
     expect(evaluateTerm('sqrt(x)', row)).toBeCloseTo(Math.sqrt(2));
+  });
+
+  it('evaluates sign values for negative, zero, and positive inputs', () => {
+    expect(evaluateTerm('sign(v)', { ...row, v: 4 })).toBe(1);
+    expect(evaluateTerm('sign(v)', { ...row, v: -2 })).toBe(-1);
+    expect(evaluateTerm('sign(v)', { ...row, v: 0 })).toBe(0);
   });
 
   it('builds a feature matrix for all rows and terms', () => {
@@ -47,6 +55,9 @@ describe('formula utilities', () => {
       '가속도 a는 목표값이므로 후보 항에 사용할 수 없습니다.',
     );
     expect(() => parseTerm('x*a')).toThrow(
+      '가속도 a는 목표값이므로 후보 항에 사용할 수 없습니다.',
+    );
+    expect(() => parseTerm('sign(a)')).toThrow(
       '가속도 a는 목표값이므로 후보 항에 사용할 수 없습니다.',
     );
     expect(() => parseTerm('tan(x)')).toThrow('지원하지 않는 함수입니다: tan');
